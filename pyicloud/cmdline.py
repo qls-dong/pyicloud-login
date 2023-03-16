@@ -33,7 +33,7 @@ def main(args=None):
     if args is None:
         args = sys.argv[1:]
 
-    parser = argparse.ArgumentParser(description="Find My iPhone CommandLine Tool")
+    parser = argparse.ArgumentParser(description="Find My iPhone CommandLine Tool23")
 
     parser.add_argument(
         "--username",

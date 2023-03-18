@@ -1,11 +1,14 @@
 """Photo service."""
+import sys
 import json
 import base64
+import re
 from urllib.parse import urlencode
 
 from datetime import datetime, timezone
 from pyicloud.exceptions import PyiCloudServiceNotActivatedException
 
+import pytz
 
 class PhotosService:
     """The 'Photos' iCloud service."""
@@ -170,8 +173,6 @@ class PhotosService:
             for folder in self._fetch_folders():
 
                 # Skiping albums having null name, that can happen sometime
-                if "albumNameEnc" not in folder["fields"]:
-                    continue
 
                 # TODO: Handle subfolders  # pylint: disable=fixme
                 if folder["recordName"] == "----Root-Folder----" or (
@@ -247,6 +248,7 @@ class PhotoAlbum:
         self.direction = direction
         self.query_filter = query_filter
         self.page_size = page_size
+        self.exception_handler = None
 
         self._len = None
 
@@ -362,107 +364,49 @@ class PhotoAlbum:
                 ],
                 "recordType": list_type,
             },
-            "resultsLimit": self.page_size * 2,
-            "desiredKeys": [
-                "resJPEGFullWidth",
-                "resJPEGFullHeight",
-                "resJPEGFullFileType",
-                "resJPEGFullFingerprint",
-                "resJPEGFullRes",
-                "resJPEGLargeWidth",
-                "resJPEGLargeHeight",
-                "resJPEGLargeFileType",
-                "resJPEGLargeFingerprint",
-                "resJPEGLargeRes",
-                "resJPEGMedWidth",
-                "resJPEGMedHeight",
-                "resJPEGMedFileType",
-                "resJPEGMedFingerprint",
-                "resJPEGMedRes",
-                "resJPEGThumbWidth",
-                "resJPEGThumbHeight",
-                "resJPEGThumbFileType",
-                "resJPEGThumbFingerprint",
-                "resJPEGThumbRes",
-                "resVidFullWidth",
-                "resVidFullHeight",
-                "resVidFullFileType",
-                "resVidFullFingerprint",
-                "resVidFullRes",
-                "resVidMedWidth",
-                "resVidMedHeight",
-                "resVidMedFileType",
-                "resVidMedFingerprint",
-                "resVidMedRes",
-                "resVidSmallWidth",
-                "resVidSmallHeight",
-                "resVidSmallFileType",
-                "resVidSmallFingerprint",
-                "resVidSmallRes",
-                "resSidecarWidth",
-                "resSidecarHeight",
-                "resSidecarFileType",
-                "resSidecarFingerprint",
-                "resSidecarRes",
-                "itemType",
-                "dataClassType",
-                "filenameEnc",
-                "originalOrientation",
-                "resOriginalWidth",
-                "resOriginalHeight",
-                "resOriginalFileType",
-                "resOriginalFingerprint",
-                "resOriginalRes",
-                "resOriginalAltWidth",
-                "resOriginalAltHeight",
-                "resOriginalAltFileType",
-                "resOriginalAltFingerprint",
-                "resOriginalAltRes",
-                "resOriginalVidComplWidth",
-                "resOriginalVidComplHeight",
-                "resOriginalVidComplFileType",
-                "resOriginalVidComplFingerprint",
-                "resOriginalVidComplRes",
-                "isDeleted",
-                "isExpunged",
-                "dateExpunged",
-                "remappedRef",
-                "recordName",
-                "recordType",
-                "recordChangeTag",
-                "masterRef",
-                "adjustmentRenderType",
-                "assetDate",
-                "addedDate",
-                "isFavorite",
-                "isHidden",
-                "orientation",
-                "duration",
-                "assetSubtype",
-                "assetSubtypeV2",
-                "assetHDRType",
-                "burstFlags",
-                "burstFlagsExt",
-                "burstId",
-                "captionEnc",
-                "locationEnc",
-                "locationV2Enc",
-                "locationLatitude",
-                "locationLongitude",
-                "adjustmentType",
-                "timeZoneOffset",
-                "vidComplDurValue",
-                "vidComplDurScale",
-                "vidComplDispValue",
-                "vidComplDispScale",
-                "vidComplVisibilityState",
-                "customRenderedValue",
-                "containerId",
-                "itemId",
-                "position",
-                "isKeyAsset",
+            u'resultsLimit': self.page_size * 2,
+            u'desiredKeys': [
+                u'resJPEGFullWidth', u'resJPEGFullHeight',
+                u'resJPEGFullFileType', u'resJPEGFullFingerprint',
+                u'resJPEGFullRes', u'resJPEGLargeWidth',
+                u'resJPEGLargeHeight', u'resJPEGLargeFileType',
+                u'resJPEGLargeFingerprint', u'resJPEGLargeRes',
+                u'resJPEGMedWidth', u'resJPEGMedHeight',
+                u'resJPEGMedFileType', u'resJPEGMedFingerprint',
+                u'resJPEGMedRes', u'resJPEGThumbWidth',
+                u'resJPEGThumbHeight', u'resJPEGThumbFileType',
+                u'resJPEGThumbFingerprint', u'resJPEGThumbRes',
+                u'resVidFullWidth', u'resVidFullHeight',
+                u'resVidFullFileType', u'resVidFullFingerprint',
+                u'resVidFullRes', u'resVidMedWidth', u'resVidMedHeight',
+                u'resVidMedFileType', u'resVidMedFingerprint',
+                u'resVidMedRes', u'resVidSmallWidth', u'resVidSmallHeight',
+                u'resVidSmallFileType', u'resVidSmallFingerprint',
+                u'resVidSmallRes', u'resSidecarWidth', u'resSidecarHeight',
+                u'resSidecarFileType', u'resSidecarFingerprint',
+                u'resSidecarRes', u'itemType', u'dataClassType',
+                u'filenameEnc', u'originalOrientation', u'resOriginalWidth',
+                u'resOriginalHeight', u'resOriginalFileType',
+                u'resOriginalFingerprint', u'resOriginalRes',
+                u'resOriginalAltWidth', u'resOriginalAltHeight',
+                u'resOriginalAltFileType', u'resOriginalAltFingerprint',
+                u'resOriginalAltRes', u'resOriginalVidComplWidth',
+                u'resOriginalVidComplHeight', u'resOriginalVidComplFileType',
+                u'resOriginalVidComplFingerprint', u'resOriginalVidComplRes',
+                u'isDeleted', u'isExpunged', u'dateExpunged', u'remappedRef',
+                u'recordName', u'recordType', u'recordChangeTag',
+                u'masterRef', u'adjustmentRenderType', u'assetDate',
+                u'addedDate', u'isFavorite', u'isHidden', u'orientation',
+                u'duration', u'assetSubtype', u'assetSubtypeV2',
+                u'assetHDRType', u'burstFlags', u'burstFlagsExt', u'burstId',
+                u'captionEnc', u'locationEnc', u'locationV2Enc',
+                u'locationLatitude', u'locationLongitude', u'adjustmentType',
+                u'timeZoneOffset', u'vidComplDurValue', u'vidComplDurScale',
+                u'vidComplDispValue', u'vidComplDispScale',
+                u'vidComplVisibilityState', u'customRenderedValue',
+                u'containerId', u'itemId', u'position', u'isKeyAsset'
             ],
-            "zoneID": {"zoneName": "PrimarySync"},
+            u'zoneID': {u'zoneName': u'PrimarySync'}
         }
 
         if query_filter:
@@ -470,8 +414,16 @@ class PhotoAlbum:
 
         return query
 
-    def __str__(self):
+    def __unicode__(self):
         return self.title
+
+    def __str__(self):
+        as_unicode = self.__unicode__()
+        if sys.version_info[0] >= 3:
+            return as_unicode
+        else:
+            return as_unicode.encode('utf-8', 'ignore')
+
 
     def __repr__(self):
         return f"<{type(self).__name__}: '{self}'>"
@@ -487,16 +439,32 @@ class PhotoAsset:
 
         self._versions = None
 
+    ITEM_TYPES = {
+        u"public.heic": u"image",
+        u"public.jpeg": u"image",
+        u"public.png": u"image",
+        u"com.apple.quicktime-movie": u"movie"
+    }
+
+    ITEM_TYPE_EXTENSIONS = {
+        u"public.heic": u"HEIC",
+        u"public.jpeg": u"JPG",
+        u"public.png": u"PNG",
+        u"com.apple.quicktime-movie": u"MOV"
+    }
     PHOTO_VERSION_LOOKUP = {
-        "original": "resOriginal",
-        "medium": "resJPEGMed",
-        "thumb": "resJPEGThumb",
+        u"original": u"resOriginal",
+        u"medium": u"resJPEGMed",
+        u"thumb": u"resJPEGThumb",
+        u"originalVideo": u"resOriginalVidCompl",
+        u"mediumVideo": u"resVidMed",
+        u"thumbVideo": u"resVidSmall",
     }
 
     VIDEO_VERSION_LOOKUP = {
-        "original": "resOriginal",
-        "medium": "resVidMed",
-        "thumb": "resVidSmall",
+        u"original": u"resOriginal",
+        u"medium": u"resVidMed",
+        u"thumb": u"resVidSmall"
     }
 
     @property
@@ -506,11 +474,18 @@ class PhotoAsset:
 
     @property
     def filename(self):
-        """Gets the photo file name."""
-        return base64.b64decode(
-            self._master_record["fields"]["filenameEnc"]["value"]
-        ).decode("utf-8")
+        fields = self._master_record['fields']
+        if 'filenameEnc' in fields and 'value' in fields['filenameEnc']:
+            return base64.b64decode(
+                fields['filenameEnc']['value']
+            ).decode('utf-8')
 
+        # Some photos don't have a filename.
+        # In that case, just use the truncated fingerprint (hash),
+        # plus the correct extension.
+        filename = re.sub('[^0-9a-zA-Z]', '_', self.id)[0:12]
+        return '.'.join([filename, self.item_type_extension])
+    
     @property
     def size(self):
         """Gets the photo size."""
@@ -525,33 +500,55 @@ class PhotoAsset:
     def asset_date(self):
         """Gets the photo asset date."""
         try:
-            return datetime.utcfromtimestamp(
-                self._asset_record["fields"]["assetDate"]["value"] / 1000.0
-            ).replace(tzinfo=timezone.utc)
-        except KeyError:
-            return datetime.utcfromtimestamp(0).replace(tzinfo=timezone.utc)
+            dt = datetime.fromtimestamp(
+                self._asset_record['fields']['assetDate']['value'] / 1000.0,
+                tz=pytz.utc)
+        except:
+            dt = datetime.fromtimestamp(0)
+        return dt
 
     @property
     def added_date(self):
         """Gets the photo added date."""
-        return datetime.utcfromtimestamp(
-            self._asset_record["fields"]["addedDate"]["value"] / 1000.0
-        ).replace(tzinfo=timezone.utc)
+        dt = datetime.fromtimestamp(
+            self._asset_record['fields']['addedDate']['value'] / 1000.0,
+            tz=pytz.utc)
+        return dt
 
     @property
     def dimensions(self):
         """Gets the photo dimensions."""
-        return (
-            self._master_record["fields"]["resOriginalWidth"]["value"],
-            self._master_record["fields"]["resOriginalHeight"]["value"],
-        )
+        return (self._master_record['fields']['resOriginalWidth']['value'],
+                self._master_record['fields']['resOriginalHeight']['value'])
+
+    @property
+    def item_type(self):
+        fields = self._master_record['fields']
+        if 'itemType' not in fields or 'value' not in fields['itemType']:
+            return 'unknown'
+        item_type = self._master_record['fields']['itemType']['value']
+        if item_type in self.ITEM_TYPES:
+            return self.ITEM_TYPES[item_type]
+        if self.filename.lower().endswith(('.heic', '.png', '.jpg', '.jpeg')):
+            return 'image'
+        return 'movie'
+
+    @property
+    def item_type_extension(self):
+        fields = self._master_record['fields']
+        if 'itemType' not in fields or 'value' not in fields['itemType']:
+            return 'unknown'
+        item_type = self._master_record['fields']['itemType']['value']
+        if item_type in self.ITEM_TYPE_EXTENSIONS:
+            return self.ITEM_TYPE_EXTENSIONS[item_type]
+        return 'unknown'
 
     @property
     def versions(self):
         """Gets the photo versions."""
         if not self._versions:
             self._versions = {}
-            if "resVidSmallRes" in self._master_record["fields"]:
+            if self.item_type == "movie":
                 typed_version_lookup = self.VIDEO_VERSION_LOOKUP
             else:
                 typed_version_lookup = self.PHOTO_VERSION_LOOKUP
@@ -587,6 +584,14 @@ class PhotoAsset:
                     else:
                         version["type"] = None
 
+                    if (self.item_type == "image" and
+                        version['type'] == "com.apple.quicktime-movie"):
+                        if self.filename.lower().endswith('.heic'):
+                            version['filename']=re.sub(
+                                '\.[^.]+$', '_HEVC.MOV', version['filename'])
+                        else:
+                            version['filename'] = re.sub(
+                                '\.[^.]+$', '.MOV', version['filename'])
                     self._versions[key] = version
 
         return self._versions
@@ -602,37 +607,7 @@ class PhotoAsset:
 
     def delete(self):
         """Deletes the photo."""
-        json_data = (
-            '{"query":{"recordType":"CheckIndexingState"},'
-            '"zoneID":{"zoneName":"PrimarySync"}}'
-        )
-
-        json_data = (
-            '{"operations":[{'
-            '"operationType":"update",'
-            '"record":{'
-            '"recordName":"%s",'
-            '"recordType":"%s",'
-            '"recordChangeTag":"%s",'
-            '"fields":{"isDeleted":{"value":1}'
-            "}}}],"
-            '"zoneID":{'
-            '"zoneName":"PrimarySync"'
-            '},"atomic":true}'
-            % (
-                self._asset_record["recordName"],
-                self._asset_record["recordType"],
-                self._master_record["recordChangeTag"],
-            )
-        )
-
-        endpoint = self._service.service_endpoint
-        params = urlencode(self._service.params)
-        url = f"{endpoint}/records/modify?{params}"
-
-        return self._service.session.post(
-            url, data=json_data, headers={"Content-type": "text/plain"}
-        )
+        return None        
 
     def __repr__(self):
         return f"<{type(self).__name__}: id={self.id}>"
